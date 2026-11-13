@@ -91,5 +91,5 @@ class SignalStrengthAnalyzer:
             "Low activation score detected. What is the core question you are trying to answer?",
             "Input is ambiguous. Restate with more concrete terminology.",
         ]
-        idx = int(hashlib.md5(text.encode()).hexdigest(), 16) % len(responses)
+        idx = int(hashlib.md5(text.encode(), usedforsecurity=False).hexdigest(), 16) % len(responses)
         return responses[idx]
