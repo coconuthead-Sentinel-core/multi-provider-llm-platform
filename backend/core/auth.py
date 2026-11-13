@@ -11,7 +11,8 @@ from typing import Any, Optional
 
 from fastapi import Depends, Header, HTTPException, status
 import bcrypt
-from jose import JWTError, jwt
+import jwt
+from jwt import PyJWTError
 from pydantic import BaseModel, Field
 
 from .config import settings
@@ -227,7 +228,7 @@ def decode_token(token: str) -> dict:
     try:
         payload = jwt.decode(token, secret, algorithms=[settings.JWT_ALGORITHM])
         return payload
-    except JWTError:
+    except PyJWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token",

@@ -78,7 +78,7 @@ app.include_router(ws_router)
 if __name__ == "__main__":
     uvicorn.run(
         app,
-        host="0.0.0.0",
+        host="0.0.0.0",  # nosec B104 - container deployments must bind all interfaces
         port=8000,
         timeout_keep_alive=75,
         log_level="info",

@@ -56,7 +56,7 @@ class RSML:
         score = round(min(len(matched) / 3, 1.0), 4)
 
         # Detect actual structural recursion (e.g., phrase appears twice)
-        phrase_hashes = [hashlib.md5(p.encode()).hexdigest()[:6]
+        phrase_hashes = [hashlib.md5(p.encode(), usedforsecurity=False).hexdigest()[:6]
                          for p in re.split(r'[.!?]', text) if len(p.strip()) > 5]
         structural_recursion = len(phrase_hashes) != len(set(phrase_hashes))
 
