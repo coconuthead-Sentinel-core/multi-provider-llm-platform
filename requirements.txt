@@ -13,7 +13,7 @@ azure-cosmos
 azure-identity
 aiohttp>=3.9.0
 cffi>=1.16.0
-python-jose[cryptography]>=3.3.0
+pyjwt[crypto]>=2.8
 bcrypt>=4.0.0
 stripe>=7.0.0
 gunicorn

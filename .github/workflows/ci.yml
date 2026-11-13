@@ -20,7 +20,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip
+        python -m pip install --upgrade pip setuptools wheel
         pip install -r requirements.txt
 
     - name: Run All Tests
@@ -50,7 +50,7 @@ jobs:
 
     - name: Install dependencies and security scanners
       run: |
-        python -m pip install --upgrade pip
+        python -m pip install --upgrade pip setuptools wheel
         pip install -r requirements.txt
         pip install pip-audit bandit
 
