@@ -27,6 +27,8 @@ from backend.api import router as api_router, ai_router
 from backend.ws_api import router as ws_router
 from backend.routes.auth_routes import auth_router
 from backend.routes.billing_routes import billing_router
+from backend.routes.library_routes import library_router
+from backend.routes.reader_routes import reader_router
 from backend.adapters.azure_openai import AzureCognitiveTokenProvider
 from backend.core.config import settings
 
@@ -68,6 +70,8 @@ app.include_router(api_router, prefix="/api")
 app.include_router(ai_router, prefix="/api")
 app.include_router(auth_router, prefix="/api")
 app.include_router(billing_router, prefix="/api")
+app.include_router(library_router, prefix="/api")
+app.include_router(reader_router, prefix="/api")
 
 # WebSocket routes (no prefix needed)
 app.include_router(ws_router)

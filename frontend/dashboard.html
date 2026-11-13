@@ -60,6 +60,18 @@
     .zone-yellow { box-shadow: 0 0 16px rgba(234,179,8,.4); }
     .zone-red    { box-shadow: 0 0 16px rgba(239,68,68,.4); }
 
+    /* Reader toolbar buttons — big colored Tk-style action tiles */
+    .reader-tbtn {
+      color: #fff; font-weight: 700; border: 0; border-radius: 10px;
+      padding: .6rem .5rem; cursor: pointer; transition: transform .08s, filter .15s;
+      display: flex; flex-direction: row; align-items: center; justify-content: center;
+      gap: .5rem; min-height: 3.25rem; font-size: .95rem;
+    }
+    .reader-tbtn:hover:not(:disabled)  { filter: brightness(1.12); }
+    .reader-tbtn:active:not(:disabled) { transform: scale(.97); }
+    .reader-tbtn:disabled              { opacity: .45; cursor: not-allowed; }
+    .reader-hl { box-shadow: inset 0 -2px 0 rgba(0,0,0,.15); }
+
     /* WS log fade */
     .ws-event { animation: fadeSlide .3s ease; }
 
@@ -342,6 +354,78 @@
             </template>
           </div>
 
+          <!-- ┌─ BOOK LIBRARY HERO CARD ──────────────────────────────────┐
+               Headlines the integration: the standalone Book Reader writes
+               to disk; the platform projects it here with live counts and
+               a cross-excerpt search the desktop app cannot do. -->
+          <div class="card p-5 border border-blue-700/60"
+               style="background: linear-gradient(135deg, rgba(59,130,246,0.12), rgba(124,58,237,0.10));">
+            <div class="flex items-start justify-between gap-3 flex-wrap">
+              <div class="flex items-start gap-4">
+                <div class="text-4xl">📚</div>
+                <div>
+                  <div class="flex items-center gap-2">
+                    <h2 class="text-lg font-semibold text-white">Book Reader Library</h2>
+                    <span class="text-[10px] uppercase tracking-wider text-blue-200 bg-blue-900/50 px-2 py-0.5 rounded">linked</span>
+                  </div>
+                  <p class="text-xs text-slate-400 mt-1">
+                    Excerpts saved from the
+                    <strong class="text-slate-200">Sentinel Forge Book Reader</strong>
+                    on this machine. The platform adds AI search and cross-excerpt analysis
+                    on top of what the desktop app saves.
+                  </p>
+                </div>
+              </div>
+              <div class="flex gap-2">
+                <button class="btn-secondary text-xs" @click="refreshLibrary()">⟳ Refresh</button>
+                <button class="btn-primary text-xs" @click="switchView('library')">Open Library →</button>
+              </div>
+            </div>
+
+            <!-- Live numbers strip -->
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mt-4">
+              <div class="bg-slate-900/60 rounded-lg p-3 border border-slate-800">
+                <div class="text-[10px] uppercase tracking-wider text-slate-400">Saves</div>
+                <div class="text-2xl font-bold text-white" x-text="libraryStats?.total_saves ?? '—'"></div>
+              </div>
+              <div class="bg-emerald-950/40 rounded-lg p-3 border border-emerald-900">
+                <div class="text-[10px] uppercase tracking-wider text-emerald-300">🟢 Green</div>
+                <div class="text-2xl font-bold text-white" x-text="libraryStats?.by_zone?.GREEN ?? '—'"></div>
+              </div>
+              <div class="bg-amber-950/40 rounded-lg p-3 border border-amber-900">
+                <div class="text-[10px] uppercase tracking-wider text-amber-300">🟡 Yellow</div>
+                <div class="text-2xl font-bold text-white" x-text="libraryStats?.by_zone?.YELLOW ?? '—'"></div>
+              </div>
+              <div class="bg-rose-950/40 rounded-lg p-3 border border-rose-900">
+                <div class="text-[10px] uppercase tracking-wider text-rose-300">🔴 Red</div>
+                <div class="text-2xl font-bold text-white" x-text="libraryStats?.by_zone?.RED ?? '—'"></div>
+              </div>
+              <div class="bg-slate-900/60 rounded-lg p-3 border border-slate-800">
+                <div class="text-[10px] uppercase tracking-wider text-slate-400">Words</div>
+                <div class="text-2xl font-bold text-white" x-text="(libraryStats?.total_words ?? 0).toLocaleString()"></div>
+              </div>
+            </div>
+
+            <!-- Inline Ask box — value prop is visible from the home view -->
+            <div class="flex gap-2 mt-4">
+              <input type="text"
+                     placeholder='Ask your library — e.g. "what did I save about stoicism?"'
+                     x-model="askQuestion"
+                     @keydown.enter="askLibrary(); switchView('library');"
+                     class="flex-1 text-sm">
+              <button class="btn-primary text-sm whitespace-nowrap"
+                      @click="askLibrary(); switchView('library');">
+                ✨ Ask →
+              </button>
+            </div>
+            <p class="text-[10px] text-slate-500 mt-2">
+              The Book Reader can search inside one file. The platform searches across all
+              <span class="text-slate-300 font-semibold" x-text="libraryStats?.total_saves ?? 0"></span>
+              of your saves at once.
+            </p>
+          </div>
+          <!-- └────────────────────────────────────────────────────────────┘ -->
+
           <!-- Chart + Zone Status -->
           <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
             <div class="card p-5 xl:col-span-2">
@@ -384,6 +468,510 @@
                 <pre x-text="JSON.stringify(quickResult, null, 2)"></pre>
               </div>
             </template>
+          </div>
+        </div>
+
+        <!-- ── BOOK READER PANEL (Tk-app parity in the dashboard) ── -->
+        <div x-show="currentView==='reader'" class="panel-enter space-y-3" x-cloak>
+
+          <!-- ─ Status strip (Energy / Zone / Protocols / Session) ───────── -->
+          <div class="card px-4 py-2 flex items-center gap-4 flex-wrap text-sm">
+            <div class="flex items-center gap-2">
+              <span class="text-slate-400 text-xs uppercase tracking-wider">Energy:</span>
+              <input type="range" min="1" max="10" x-model="readerEnergy" class="w-24" style="padding:0;">
+              <span class="font-bold text-white" x-text="readerEnergy + '/10'"></span>
+            </div>
+            <span class="px-3 py-1 rounded font-bold text-white text-xs"
+                  :class="readerEnergy >= 7 ? 'bg-emerald-600 zone-green' : readerEnergy >= 4 ? 'bg-amber-600 zone-yellow' : 'bg-rose-600 zone-red'"
+                  x-text="(readerEnergy >= 7 ? '● GREEN ZONE' : readerEnergy >= 4 ? '● YELLOW ZONE' : '● RED ZONE')"></span>
+            <span class="px-2 py-0.5 rounded bg-emerald-700/40 text-emerald-300 text-xs border border-emerald-700">
+              Ω1 <span x-show="readerProtocols.omega1">✓</span><span x-show="!readerProtocols.omega1">·</span>
+            </span>
+            <span class="px-2 py-0.5 rounded bg-emerald-700/40 text-emerald-300 text-xs border border-emerald-700">
+              Joy <span x-show="readerProtocols.joy">✓</span><span x-show="!readerProtocols.joy">·</span>
+            </span>
+            <span class="px-2 py-0.5 rounded bg-emerald-700/40 text-emerald-300 text-xs border border-emerald-700">
+              Coconut <span x-show="readerProtocols.coconut">✓</span><span x-show="!readerProtocols.coconut">·</span>
+            </span>
+            <div class="ml-auto flex items-center gap-2">
+              <button class="px-3 py-1 rounded text-white text-xs font-semibold"
+                      :class="readerSessionStarted ? 'bg-slate-700' : 'bg-emerald-600 hover:bg-emerald-500'"
+                      @click="readerStartSession()"
+                      :disabled="readerSessionStarted">▶ Start</button>
+              <button class="px-3 py-1 rounded text-white text-xs font-semibold bg-slate-700 hover:bg-slate-600"
+                      @click="readerEndSession()">⬛ End</button>
+              <span class="text-xs text-slate-400" x-text="new Date().toLocaleDateString('en-CA')"></span>
+            </div>
+          </div>
+
+          <!-- ─ Big colored toolbar (Open / Library / Paste / Read aloud / Stop / Voice note / Save / Study) ── -->
+          <div class="grid grid-cols-4 md:grid-cols-8 gap-2">
+            <button class="reader-tbtn" style="background:#0891b2;" @click="readerOpenModalShow()">
+              <span class="text-2xl">📂</span><span>Open</span>
+            </button>
+            <button class="reader-tbtn" style="background:#7c3aed;" @click="readerToolbarLibrary()">
+              <span class="text-2xl">📚</span><span>Library</span>
+            </button>
+            <button class="reader-tbtn" style="background:#ea580c;" @click="readerToolbarPaste()">
+              <span class="text-2xl">📋</span><span>Paste</span>
+            </button>
+            <button class="reader-tbtn" style="background:#16a34a;" @click="readerSpeak()" :disabled="readerSpeaking">
+              <span class="text-2xl">🔊</span><span>Read aloud</span>
+            </button>
+            <button class="reader-tbtn" style="background:#475569;" @click="readerStopSpeak()" :disabled="!readerSpeaking">
+              <span class="text-2xl">⬛</span><span>Stop</span>
+            </button>
+            <button class="reader-tbtn" style="background:#0ea5e9;" @click="readerVoiceNote()">
+              <span class="text-2xl">🎙</span><span>Voice note</span>
+            </button>
+            <button class="reader-tbtn" style="background:#dc2626;" @click="saveReaderExcerpt(!!readerSelection)" :disabled="!readerCurrent || readerSaving">
+              <span class="text-2xl">💾</span><span x-text="readerSaving ? 'Saving...' : 'Save'"></span>
+            </button>
+            <button class="reader-tbtn" style="background:#991b1b;" @click="readerToolbarStudy()">
+              <span class="text-2xl">📓</span><span>Study</span>
+            </button>
+          </div>
+
+          <!-- ─ Highlight + Timer controls ────────────────────────────────── -->
+          <div class="card px-4 py-2 flex items-center gap-3 flex-wrap text-sm">
+            <span class="text-slate-400 text-xs uppercase tracking-wider">Highlight by:</span>
+            <select x-model="readerHighlightBy" class="text-xs max-w-[8rem]">
+              <option value="sentence">Sentence</option>
+              <option value="word">Word</option>
+              <option value="paragraph">Paragraph</option>
+            </select>
+            <span class="text-slate-400 text-xs uppercase tracking-wider ml-2">Color:</span>
+            <select x-model="readerHighlightSwatch" @change="pickHighlightSwatch(readerHighlightSwatch)" class="text-xs max-w-[6.5rem]">
+              <template x-for="(hex,name) in readerHighlightSwatches" :key="name">
+                <option :value="name" x-text="name"></option>
+              </template>
+            </select>
+            <span class="w-5 h-5 rounded border-2 border-slate-500" :style="'background:' + readerHighlightColor"></span>
+            <button class="px-3 py-1 rounded text-white text-xs font-bold" style="background:#ea580c;"
+                    @click="readerHighlightSelection()">
+              ✎ Highlight selection
+            </button>
+
+            <span class="text-slate-400 text-xs uppercase tracking-wider ml-4">⏱ Timer:</span>
+            <select x-model="readerTimerDuration" class="text-xs max-w-[6rem]" :disabled="readerTimerRunning">
+              <option :value="5">5 min</option>
+              <option :value="10">10 min</option>
+              <option :value="15">15 min</option>
+              <option :value="20">20 min</option>
+              <option :value="25">25 min</option>
+              <option :value="45">45 min</option>
+            </select>
+            <button class="px-3 py-1 rounded text-white text-xs font-bold"
+                    :class="readerTimerRunning ? 'bg-rose-600' : 'bg-emerald-600 hover:bg-emerald-500'"
+                    @click="readerStartTimer()"
+                    x-text="readerTimerRunning ? 'Stop' : 'Start'"></button>
+            <span class="font-mono text-white font-bold text-base" x-text="readerTimerDisplay()"></span>
+          </div>
+
+          <!-- ─ Reading folders banner ────────────────────────────────────── -->
+          <div class="card px-4 py-2 flex items-center gap-3 flex-wrap text-sm">
+            <span class="text-slate-300 font-semibold">📁 Reading folders:</span>
+            <template x-for="f in readerFolderConfig" :key="f.path">
+              <span class="inline-flex items-center gap-1.5 px-2 py-1 rounded border text-[11px]"
+                    :class="f.exists ? (f.is_excerpts_dir ? 'bg-emerald-900/30 border-emerald-700 text-emerald-200' : 'bg-slate-800 border-slate-600 text-slate-200') : 'bg-rose-900/30 border-rose-700 text-rose-200 line-through'">
+                <span class="truncate max-w-[20rem]" :title="f.path" x-text="f.path"></span>
+                <span class="text-slate-400 font-mono" x-text="'· ' + f.count + ' files'"></span>
+                <span x-show="f.is_excerpts_dir" class="text-emerald-400 ml-0.5">excerpts</span>
+                <button class="text-slate-400 hover:text-rose-300 ml-1" title="Remove"
+                        @click="removeReaderFolder(f.path)">×</button>
+              </span>
+            </template>
+            <button class="px-2 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold ml-auto"
+                    @click="readerShowFolderManager = !readerShowFolderManager">
+              <span x-show="!readerShowFolderManager">＋ Add folder</span>
+              <span x-show="readerShowFolderManager">close</span>
+            </button>
+          </div>
+          <div class="card px-4 py-3" x-show="readerShowFolderManager" x-cloak>
+            <label class="text-[10px] uppercase tracking-wider text-slate-400 block mb-1">
+              Paste the full path to a folder containing your books
+              <span class="text-slate-500">(e.g. <code>C:\Users\you\Documents\Books</code> or <code>D:\Library</code>)</span>
+            </label>
+            <div class="flex gap-2">
+              <input type="text" x-model="readerNewFolder"
+                     placeholder="C:\Users\sbrya\OneDrive\Documents\Books"
+                     @keydown.enter="addReaderFolder()"
+                     class="flex-1 text-sm font-mono">
+              <button class="btn-primary text-xs whitespace-nowrap"
+                      @click="addReaderFolder()" :disabled="readerFolderLoading">
+                <span x-show="!readerFolderLoading">＋ Add</span>
+                <span x-show="readerFolderLoading">Adding…</span>
+              </button>
+            </div>
+            <p class="text-[10px] text-slate-500 mt-2">
+              The folder is scanned recursively for <code>.md / .txt / .docx / .pdf / .html / .rtf</code>.
+              Your books stay where they are — this just tells the reader where to look.
+            </p>
+          </div>
+
+          <!-- ─ Status message ────────────────────────────────────────────── -->
+          <div class="text-xs text-slate-400 italic px-1" x-text="readerStatusMessage"></div>
+
+          <!-- ─ Two-pane main area: notes (narrow left) + reader/commentary (wide right) ── -->
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-3">
+
+            <!-- LEFT: notes pane -->
+            <div class="card p-0 lg:col-span-3 overflow-hidden flex flex-col">
+              <div class="px-3 py-2 border-b border-slate-700 text-xs text-slate-400 uppercase tracking-wider flex items-center justify-between">
+                <span>📝 Notes</span>
+                <button class="text-[10px] text-slate-500 hover:text-slate-200" @click="readerNotes=''">clear</button>
+              </div>
+              <textarea x-model="readerNotes"
+                        class="flex-1 bg-transparent border-0 rounded-none text-sm text-slate-200 resize-none min-h-[24rem]"
+                        style="padding:0.75rem;"
+                        placeholder="Jot notes while you read — they stay local to this session."></textarea>
+            </div>
+
+            <!-- RIGHT: reader (top) + commentary (bottom) -->
+            <div class="lg:col-span-9 space-y-3 min-w-0">
+
+              <!-- Reader -->
+              <div class="card p-0 overflow-hidden">
+                <div class="px-4 py-2 border-b border-slate-700 flex items-center justify-between gap-3">
+                  <div class="flex items-center gap-2 min-w-0">
+                    <span class="text-base">📖</span>
+                    <span class="text-sm text-white font-semibold truncate"
+                          x-text="readerCurrent ? readerCurrent.name : 'No book open'"></span>
+                  </div>
+                  <div class="flex items-center gap-2 shrink-0">
+                    <span class="text-[10px] text-slate-400" x-show="readerCurrent">
+                      <span x-text="(readerCurrent?.word_count||0).toLocaleString()"></span> words
+                    </span>
+                    <span x-show="readerSpeaking" class="text-[10px] text-emerald-300 animate-pulse">🔊 reading…</span>
+                  </div>
+                </div>
+                <template x-if="readerLoading">
+                  <div class="p-6 space-y-2">
+                    <div class="skeleton h-4 w-2/3"></div>
+                    <div class="skeleton h-4 w-full"></div>
+                    <div class="skeleton h-4 w-full"></div>
+                  </div>
+                </template>
+                <template x-if="!readerCurrent && !readerLoading">
+                  <div class="text-slate-500 text-sm text-center py-16">
+                    Click <strong class="text-cyan-400">📂 Open</strong> in the toolbar to pick a book,
+                    or <strong class="text-orange-400">📋 Paste</strong> from your clipboard.
+                  </div>
+                </template>
+                <div id="reader-body"
+                     class="px-6 py-5 max-h-[55vh] overflow-y-auto text-slate-200 text-[15px] leading-relaxed whitespace-pre-wrap"
+                     style="font-family: Georgia, 'Iowan Old Style', 'Times New Roman', serif;"
+                     @mouseup="captureReaderSelection()"
+                     @keyup="captureReaderSelection()"
+                     x-show="readerCurrent"
+                     x-text="readerCurrent?.content || ''"></div>
+              </div>
+
+              <!-- Commentary -->
+              <div class="card p-0 overflow-hidden">
+                <div class="px-4 py-2 border-b border-slate-700 flex items-center justify-between gap-3">
+                  <div class="flex items-center gap-2 min-w-0">
+                    <span class="text-base">📄</span>
+                    <span class="text-sm text-white font-semibold truncate"
+                          x-text="readerCommentary ? readerCommentary.name : 'Commentary'"></span>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <button class="px-2 py-1 rounded text-white text-[11px] font-semibold bg-cyan-600 hover:bg-cyan-500"
+                            @click="readerOpenCommentary()">📂 Open commentary…</button>
+                    <button class="px-2 py-1 rounded text-slate-300 text-[11px] font-semibold bg-slate-700 hover:bg-slate-600"
+                            @click="readerClearCommentary()">Clear</button>
+                  </div>
+                </div>
+                <div class="px-6 py-4 max-h-[28vh] overflow-y-auto text-slate-300 text-[13px] leading-relaxed whitespace-pre-wrap"
+                     style="font-family: Georgia, serif;"
+                     x-text="readerCommentary ? readerCommentary.content : ''"></div>
+                <div x-show="!readerCommentary" class="text-slate-500 text-xs text-center py-6 italic">
+                  Open a second file here for side-by-side reading.
+                </div>
+              </div>
+
+              <!-- Save metadata row (compact, below the reader) -->
+              <div class="card p-3 flex items-end gap-2 flex-wrap" x-show="readerCurrent">
+                <div class="flex-1 min-w-[10rem]">
+                  <label class="text-[10px] uppercase tracking-wider text-slate-400 block mb-1">Title hint</label>
+                  <input type="text" x-model="readerSaveTitle" class="text-xs">
+                </div>
+                <div class="w-24">
+                  <label class="text-[10px] uppercase tracking-wider text-slate-400 block mb-1">Zone</label>
+                  <select x-model="readerSaveZone" class="text-xs">
+                    <option value="GREEN">🟢 GREEN</option>
+                    <option value="YELLOW">🟡 YELLOW</option>
+                    <option value="RED">🔴 RED</option>
+                  </select>
+                </div>
+                <div class="w-32">
+                  <label class="text-[10px] uppercase tracking-wider text-slate-400 block mb-1">
+                    Cog. load <span class="text-slate-200 font-bold" x-text="readerSaveLoad"></span>
+                  </label>
+                  <input type="range" min="1" max="10" x-model="readerSaveLoad" class="w-full" style="padding:0;">
+                </div>
+                <div class="text-[10px] text-slate-400 self-end">
+                  <span x-show="readerSelection" class="text-emerald-300 font-mono"
+                        x-text="readerSelection.length + ' chars selected'"></span>
+                  <span x-show="!readerSelection" class="italic">select text → 💾 Save saves selection · no selection → saves whole page</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ─ Open-file modal ─────────────────────────────────────────── -->
+          <div x-show="readerShowOpenModal" x-cloak
+               class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
+               @click.self="readerShowOpenModal=false">
+            <div class="card w-full max-w-3xl max-h-[80vh] flex flex-col overflow-hidden">
+              <div class="px-4 py-3 border-b border-slate-700 flex items-center justify-between">
+                <h2 class="text-base font-semibold text-white">📂 Open a book</h2>
+                <button class="text-slate-400 hover:text-white text-xl leading-none" @click="readerShowOpenModal=false">×</button>
+              </div>
+              <div class="px-4 py-2 border-b border-slate-800 flex items-center gap-2">
+                <input type="text" placeholder="Filter..." x-model="readerSearch" class="text-xs flex-1">
+                <select x-model="readerExtFilter" @change="refreshReaderList()" class="text-xs max-w-[8rem]">
+                  <option value="ALL">All formats</option>
+                  <option value="md">Markdown</option>
+                  <option value="txt">Text</option>
+                  <option value="docx">Word</option>
+                  <option value="pdf">PDF</option>
+                  <option value="html">HTML</option>
+                </select>
+                <button class="btn-secondary text-xs" @click="refreshReaderList()">⟳</button>
+              </div>
+              <div class="overflow-y-auto divide-y divide-slate-800 flex-1">
+                <template x-if="readerListLoading">
+                  <div class="p-4 space-y-2">
+                    <div class="skeleton h-4 w-3/4"></div>
+                    <div class="skeleton h-4 w-2/3"></div>
+                  </div>
+                </template>
+                <template x-for="f in filteredReaderFiles()" :key="f.path">
+                  <button class="w-full text-left px-4 py-2.5 hover:bg-slate-800/60 transition"
+                          @click="readerOpenModalPick(f)">
+                    <div class="flex items-start justify-between gap-2">
+                      <div class="text-sm text-white truncate flex-1" x-text="f.name"></div>
+                      <span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-700 text-slate-300 shrink-0"
+                            x-text="extLabel(f.ext)"></span>
+                    </div>
+                    <div class="text-[10px] text-slate-500 truncate mt-0.5" x-text="f.rel_path"></div>
+                  </button>
+                </template>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── BOOK LIBRARY PANEL (reads Desktop\Books\ via /api/library/*) ── -->
+        <div x-show="currentView==='library'" class="panel-enter space-y-6" x-cloak>
+          <div class="flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <h1 class="text-2xl font-bold text-white">📚 Book Library</h1>
+              <p class="text-xs text-slate-400 mt-1">
+                Saves from the Sentinel Forge desktop Book Reader, live from
+                <code class="text-emerald-300" x-text="libraryStats ? libraryStats.books_dir : '...'"></code>
+              </p>
+            </div>
+            <button class="btn-secondary text-xs" @click="refreshLibrary()">⟳ Refresh</button>
+          </div>
+
+          <!-- ┌─ Ask Your Library (the platform-only feature) ─────────────┐ -->
+          <div class="card p-5 border border-blue-700/50" style="background: linear-gradient(135deg, rgba(59,130,246,0.08), rgba(124,58,237,0.08));">
+            <div class="flex items-center justify-between mb-2">
+              <h2 class="font-semibold text-white flex items-center gap-2">
+                <span class="text-xl">✨</span> Ask Your Library
+              </h2>
+              <span class="text-[10px] uppercase tracking-wider text-blue-300 bg-blue-900/40 px-2 py-0.5 rounded">platform feature</span>
+            </div>
+            <p class="text-xs text-slate-400 mb-3">
+              Search across <strong class="text-slate-200" x-text="libraryStats?.total_saves ?? 0"></strong>
+              saved excerpts at once. The standalone Book Reader can only search inside one file —
+              the platform searches your whole reading history.
+            </p>
+            <div class="flex gap-2">
+              <input type="text" placeholder='e.g. "what did I save about stoicism?" or "bushido honor"'
+                     x-model="askQuestion"
+                     @keydown.enter="askLibrary()"
+                     class="flex-1">
+              <button class="btn-primary whitespace-nowrap" @click="askLibrary()" :disabled="askLoading">
+                <span x-show="!askLoading">Ask →</span>
+                <span x-show="askLoading">Searching...</span>
+              </button>
+            </div>
+            <div class="flex flex-wrap gap-1.5 mt-2" x-show="askHistory.length">
+              <span class="text-[10px] text-slate-500 mr-1">recent:</span>
+              <template x-for="q in askHistory" :key="q">
+                <button class="text-[11px] px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700"
+                        @click="useAskHistory(q)" x-text="q"></button>
+              </template>
+            </div>
+
+            <!-- Results -->
+            <template x-if="askResult">
+              <div class="mt-4 space-y-3">
+                <div class="text-xs text-emerald-300 italic" x-text="askResult.answer_synthesis"></div>
+                <template x-if="askResult.matches.length === 0">
+                  <div class="text-sm text-slate-500 py-4 text-center">
+                    No excerpts matched. Try different terms.
+                  </div>
+                </template>
+                <template x-for="m in askResult.matches" :key="m.filename">
+                  <button class="w-full text-left bg-slate-900/60 hover:bg-slate-900 border border-slate-800 hover:border-blue-700 rounded-lg p-3 transition"
+                          @click="openLibraryItem(m.filename)">
+                    <div class="flex items-start justify-between gap-2 mb-1">
+                      <div class="text-sm text-white font-medium truncate" x-text="sourceLabel(m.source_book) || m.doc_id"></div>
+                      <div class="flex items-center gap-1.5 shrink-0">
+                        <span class="text-[10px] px-1.5 py-0.5 rounded border" :class="zoneClass(m.zone)" x-text="m.zone"></span>
+                        <span class="text-[10px] text-blue-300 font-mono">score <span x-text="m.score"></span></span>
+                      </div>
+                    </div>
+                    <div class="text-[11px] text-slate-300 leading-relaxed" x-text="m.snippet"></div>
+                    <div class="flex flex-wrap gap-1 mt-1.5">
+                      <template x-for="h in m.hits" :key="h">
+                        <span class="text-[10px] px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-200" x-text="h"></span>
+                      </template>
+                    </div>
+                  </button>
+                </template>
+              </div>
+            </template>
+          </div>
+          <!-- └──────────────────────────────────────────────────────────────┘ -->
+
+          <!-- Stats strip -->
+          <div class="grid grid-cols-2 md:grid-cols-5 gap-3" x-show="libraryStats">
+            <div class="card p-4">
+              <div class="text-xs text-slate-400 uppercase tracking-wide">Total Saves</div>
+              <div class="text-2xl font-bold text-white mt-1" x-text="libraryStats?.total_saves ?? 0"></div>
+            </div>
+            <div class="card p-4 zone-green">
+              <div class="text-xs text-emerald-300 uppercase tracking-wide">🟢 GREEN</div>
+              <div class="text-2xl font-bold text-white mt-1" x-text="libraryStats?.by_zone?.GREEN ?? 0"></div>
+              <div class="text-[10px] text-slate-400">cog. load 7–10 · active</div>
+            </div>
+            <div class="card p-4 zone-yellow">
+              <div class="text-xs text-amber-300 uppercase tracking-wide">🟡 YELLOW</div>
+              <div class="text-2xl font-bold text-white mt-1" x-text="libraryStats?.by_zone?.YELLOW ?? 0"></div>
+              <div class="text-[10px] text-slate-400">cog. load 4–6 · reference</div>
+            </div>
+            <div class="card p-4 zone-red">
+              <div class="text-xs text-rose-300 uppercase tracking-wide">🔴 RED</div>
+              <div class="text-2xl font-bold text-white mt-1" x-text="libraryStats?.by_zone?.RED ?? 0"></div>
+              <div class="text-[10px] text-slate-400">cog. load 1–3 · archive</div>
+            </div>
+            <div class="card p-4">
+              <div class="text-xs text-slate-400 uppercase tracking-wide">Total Words</div>
+              <div class="text-2xl font-bold text-white mt-1" x-text="(libraryStats?.total_words ?? 0).toLocaleString()"></div>
+              <div class="text-[10px] text-slate-400">avg load <span x-text="libraryStats?.avg_load ?? 0"></span></div>
+            </div>
+          </div>
+
+          <!-- Zone filter chips + source search -->
+          <div class="card p-4 flex items-center gap-2 flex-wrap">
+            <span class="text-xs text-slate-400 mr-1">Zone:</span>
+            <template x-for="z in ['ALL','GREEN','YELLOW','RED']" :key="z">
+              <button
+                class="px-3 py-1 rounded-md border text-xs font-semibold transition"
+                :class="libraryZoneFilter===z ? 'bg-blue-600 border-blue-500 text-white' : 'bg-slate-900 border-slate-700 text-slate-300 hover:border-slate-500'"
+                @click="setLibraryZone(z)"
+                x-text="z"></button>
+            </template>
+            <input type="text" placeholder="Filter by source filename..."
+              class="text-xs ml-auto flex-1 max-w-xs"
+              x-model.debounce.300ms="librarySourceFilter"
+              @input="refreshLibrary()">
+          </div>
+
+          <!-- Excerpts list + preview pane -->
+          <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
+            <!-- LEFT: list -->
+            <div class="card p-0 lg:col-span-2 overflow-hidden">
+              <div class="flex items-center justify-between px-4 py-3 border-b border-slate-700">
+                <h2 class="font-semibold text-white text-sm">
+                  Saves <span class="text-slate-500" x-text="'(' + libraryItems.length + ')'"></span>
+                </h2>
+                <span class="text-[10px] text-slate-500" x-text="libraryLoading ? 'Loading...' : ''"></span>
+              </div>
+              <div class="max-h-[60vh] overflow-y-auto divide-y divide-slate-800">
+                <template x-if="!libraryLoading && libraryItems.length===0">
+                  <div class="p-6 text-center text-slate-500 text-sm">
+                    No saves yet. Open the <strong class="text-slate-300">Book Reader</strong>,
+                    save an excerpt, then click <em class="text-blue-400">⟳ Refresh</em>.
+                  </div>
+                </template>
+                <template x-for="item in libraryItems" :key="item.filename">
+                  <button
+                    class="w-full text-left px-4 py-3 hover:bg-slate-800/60 transition"
+                    :class="librarySelected?.filename === item.filename ? 'bg-slate-800/80 border-l-2 border-blue-500' : ''"
+                    @click="openLibraryItem(item.filename)">
+                    <div class="flex items-start justify-between gap-2">
+                      <div class="min-w-0 flex-1">
+                        <div class="text-sm text-white font-medium truncate" x-text="sourceLabel(item.source_book)"></div>
+                        <div class="text-[11px] text-slate-500 truncate mt-0.5" x-text="item.filename"></div>
+                      </div>
+                      <span class="text-[10px] px-2 py-0.5 rounded border whitespace-nowrap"
+                            :class="zoneClass(item.zone)"
+                            x-text="item.zone"></span>
+                    </div>
+                    <div class="flex items-center gap-3 mt-1.5 text-[11px] text-slate-400">
+                      <span>load <span class="text-slate-200 font-semibold" x-text="item.cognitive_load"></span></span>
+                      <span x-text="(item.word_count || 0).toLocaleString() + ' words'"></span>
+                      <span class="ml-auto truncate" x-text="(item.timestamp || item.mtime || '').slice(0,16).replace('T',' ')"></span>
+                    </div>
+                  </button>
+                </template>
+              </div>
+            </div>
+
+            <!-- RIGHT: preview -->
+            <div class="card p-5 lg:col-span-3 overflow-hidden">
+              <template x-if="!librarySelected && !libraryPreviewLoading">
+                <div class="text-slate-500 text-sm text-center py-16">
+                  Click a save on the left to preview it here.
+                </div>
+              </template>
+              <template x-if="libraryPreviewLoading">
+                <div class="space-y-2">
+                  <div class="skeleton h-4 w-1/2"></div>
+                  <div class="skeleton h-4 w-3/4"></div>
+                  <div class="skeleton h-4 w-2/3"></div>
+                </div>
+              </template>
+              <template x-if="librarySelected">
+                <div>
+                  <div class="flex items-start justify-between gap-3 mb-3">
+                    <div class="min-w-0">
+                      <h2 class="text-lg font-semibold text-white truncate" x-text="sourceLabel(librarySelected.source_book)"></h2>
+                      <p class="text-[11px] text-slate-500 truncate" x-text="librarySelected.source_book"></p>
+                    </div>
+                    <span class="text-xs px-2 py-1 rounded border whitespace-nowrap"
+                          :class="zoneClass(librarySelected.zone)"
+                          x-text="librarySelected.zone + ' · load ' + librarySelected.cognitive_load"></span>
+                  </div>
+                  <div class="flex flex-wrap gap-2 text-[11px] text-slate-400 mb-3">
+                    <span>📅 <span x-text="(librarySelected.timestamp||'').replace('T',' ')"></span></span>
+                    <span>📝 <span x-text="(librarySelected.word_count||0).toLocaleString()"></span> words</span>
+                    <span>🆔 <code x-text="librarySelected.doc_id"></code></span>
+                  </div>
+                  <pre class="bg-slate-900 border border-slate-700 rounded-lg p-4 text-xs text-slate-200 max-h-[55vh] overflow-auto whitespace-pre-wrap leading-relaxed"
+                       x-text="librarySelected.body || librarySelected.preview || '(empty)'"></pre>
+                </div>
+              </template>
+            </div>
+          </div>
+
+          <!-- Source breakdown -->
+          <div class="card p-5" x-show="libraryStats && Object.keys(libraryStats.by_source||{}).length">
+            <h2 class="font-semibold text-white text-sm mb-3">By source book</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+              <template x-for="[src,count] in Object.entries(libraryStats?.by_source || {}).sort((a,b)=>b[1]-a[1])" :key="src">
+                <div class="flex items-center justify-between bg-slate-900/60 rounded px-3 py-2 border border-slate-800">
+                  <span class="truncate text-slate-300" x-text="src"></span>
+                  <span class="text-blue-400 font-semibold ml-2" x-text="count + ' saves'"></span>
+                </div>
+              </template>
+            </div>
           </div>
         </div>
 
@@ -829,6 +1417,8 @@ function sentinelApp() {
     // ── Nav ──
     navItems: [
       { id: 'dashboard',  label: 'Dashboard',       icon: '◈' },
+      { id: 'reader',     label: 'Book Reader',     icon: '📖' },
+      { id: 'library',    label: 'Saved Excerpts',  icon: '📁' },
       { id: 'cognitive',  label: 'Cognitive Engine', icon: '⬡' },
       { id: 'threads',    label: 'Threads',          icon: '◇' },
       { id: 'glyphs',     label: 'Glyphs',           icon: '✦' },
@@ -861,6 +1451,75 @@ function sentinelApp() {
     quickInput: '',
     quickLoading: false,
     quickResult: null,
+
+    // ── Book Reader (in-dashboard reading flow — mirrors the Tk app) ──
+    readerFolders: [],
+    readerFiles: [],
+    readerSearch: '',
+    readerExtFilter: 'ALL',           // ALL | md | txt | docx | pdf | html
+    readerListLoading: false,
+    readerCurrent: null,              // { name, path, ext, word_count, content, front_matter }
+    readerLoading: false,
+    readerSelection: '',              // current text selection
+    readerSaveZone: 'GREEN',
+    readerSaveLoad: 7,
+    readerSaveTitle: '',
+    readerSaving: false,
+
+    // Session state (Tk-app parity)
+    readerSessionStarted: false,
+    readerSessionStart: null,
+    readerEnergy: 10,                 // 1-10 (matches Tk top-bar)
+    readerProtocols: { omega1: true, joy: true, coconut: true },
+    readerStatusMessage: 'Ready (browser TTS). Click 📂 Open a book to begin.',
+    readerShowOpenModal: false,
+    readerNotes: '',                  // left-pane notes
+    readerCommentary: null,           // { name, content } loaded into bottom-right pane
+
+    // Highlight controls
+    readerHighlightBy: 'sentence',    // sentence | word | paragraph
+    readerHighlightColor: '#0d9488',  // current paint color
+    readerHighlightSwatch: 'Teal',
+    readerHighlightSwatches: {
+      Teal:   '#0d9488',
+      Yellow: '#facc15',
+      Pink:   '#ec4899',
+      Cyan:   '#22d3ee',
+      Green:  '#22c55e',
+      Orange: '#f97316',
+      Red:    '#ef4444',
+      Purple: '#a855f7',
+    },
+
+    // Read-aloud (browser SpeechSynthesis)
+    readerSpeaking: false,
+    readerUtterance: null,
+
+    // Pomodoro timer
+    readerTimerDuration: 10,          // minutes (dropdown)
+    readerTimerRunning: false,
+    readerTimerLeft: 0,               // seconds
+    readerTimerInterval: null,
+
+    // Reading folders config
+    readerFolderConfig: [],           // [{path, exists, count, is_excerpts_dir}]
+    readerNewFolder: '',
+    readerFolderLoading: false,
+    readerShowFolderManager: false,
+
+    // ── Book Library (book reader integration) ──
+    libraryStats: null,
+    libraryItems: [],
+    libraryLoading: false,
+    libraryZoneFilter: 'ALL',          // ALL | GREEN | YELLOW | RED
+    librarySourceFilter: '',
+    librarySelected: null,             // currently previewed excerpt
+    libraryPreviewLoading: false,
+    // Ask Your Library
+    askQuestion: '',
+    askLoading: false,
+    askResult: null,                   // { question, matches, answer_synthesis, ... }
+    askHistory: [],                    // last few questions, newest first
 
     // ── Cognitive ──
     cogStatus: null,
@@ -985,7 +1644,19 @@ function sentinelApp() {
     // ─────────────────────────────────────
     async init() {
       await this.checkHealth();
+      // Local single-user app — bypass the login wall on 127.0.0.1 / localhost.
+      // The dashboard runs alongside the book reader on the user's own
+      // machine. Auth here adds zero value and hides the demo.
+      const host = window.location.hostname;
+      if (host === '127.0.0.1' || host === 'localhost' || host === '') {
+        if (!this.authToken) {
+          this.authToken = 'local-demo';
+          this.userData = { email: 'local@sentinelforge', tier: 'pro', name: 'Local Demo' };
+        }
+      }
       this.startChartUpdater();
+      // Auto-load library so the dashboard shows real data immediately.
+      this.refreshLibrary().catch(() => {});
     },
 
     async checkHealth() {
@@ -1074,6 +1745,8 @@ function sentinelApp() {
     async switchView(id) {
       this.currentView = id;
       if (id === 'dashboard')  this.refreshDashboard();
+      if (id === 'reader')     { this.refreshReaderList(); this.loadReaderFolders(); }
+      if (id === 'library')    this.refreshLibrary();
       if (id === 'cognitive')  { this.loadCogStatus(); this.loadRules(); this.loadPrime(); }
       if (id === 'threads')    this.loadThreads();
       if (id === 'glyphs')     this.loadGlyphs();
@@ -1109,6 +1782,395 @@ function sentinelApp() {
       } finally {
         this.dashLoading = false;
       }
+    },
+
+    // ─────────────────────────────────────
+    // BOOK READER (in-dashboard reading flow via /api/reader/*)
+    // ─────────────────────────────────────
+    async refreshReaderList() {
+      this.readerListLoading = true;
+      try {
+        const ext = this.readerExtFilter === 'ALL' ? '' : ('?ext=' + this.readerExtFilter);
+        const r = await this.api('GET', '/api/reader/list' + ext);
+        this.readerFolders = r.folders || [];
+        this.readerFiles   = r.items || [];
+      } catch (e) {
+        this.toast('Reader list failed: ' + e.message, 'error');
+        this.readerFiles = [];
+      } finally {
+        this.readerListLoading = false;
+      }
+    },
+
+    async openReaderFile(file) {
+      this.readerLoading = true;
+      this.readerCurrent = null;
+      this.readerSelection = '';
+      try {
+        const r = await this.api('GET', '/api/reader/content?path=' + encodeURIComponent(file.path));
+        this.readerCurrent = r;
+        // Pre-fill title hint from filename stem
+        this.readerSaveTitle = file.name.replace(/\.[^.]+$/, '');
+      } catch (e) {
+        this.toast('Open failed: ' + e.message, 'error');
+      } finally {
+        this.readerLoading = false;
+      }
+    },
+
+    captureReaderSelection() {
+      // Called on mouseup / keyup inside the content pane.
+      const sel = window.getSelection ? window.getSelection() : null;
+      this.readerSelection = sel ? (sel.toString() || '') : '';
+    },
+
+    async saveReaderExcerpt(useSelection) {
+      if (!this.readerCurrent) {
+        this.toast('Open a book first.', 'info');
+        return;
+      }
+      const text = useSelection ? (this.readerSelection || '').trim() : (this.readerCurrent.content || '').trim();
+      if (!text || text.length < 5) {
+        this.toast(useSelection ? 'Select some text first.' : 'Nothing to save.', 'info');
+        return;
+      }
+      this.readerSaving = true;
+      try {
+        const r = await this.api('POST', '/api/reader/save-excerpt', {
+          text:           text,
+          source_book:    this.readerCurrent.path,
+          zone:           this.readerSaveZone,
+          cognitive_load: parseInt(this.readerSaveLoad) || 7,
+          selection:      !!useSelection,
+          title_hint:     this.readerSaveTitle || '',
+          tags:           [],
+        });
+        this.toast(`💾 Saved as ${r.filename}`, 'success');
+        // Refresh the library counts in the background so the home card updates
+        this.refreshLibrary().catch(() => {});
+      } catch (e) {
+        this.toast('Save failed: ' + e.message, 'error');
+      } finally {
+        this.readerSaving = false;
+      }
+    },
+
+    filteredReaderFiles() {
+      const q = (this.readerSearch || '').toLowerCase();
+      if (!q) return this.readerFiles;
+      return this.readerFiles.filter(f =>
+        f.name.toLowerCase().includes(q) || f.rel_path.toLowerCase().includes(q)
+      );
+    },
+
+    extLabel(e) {
+      return (e || '').replace('.', '').toUpperCase();
+    },
+
+    // ─── Reader toolbar (matches the Tk app) ─────────────────────────────
+    readerStartSession() {
+      this.readerSessionStarted = true;
+      this.readerSessionStart   = new Date();
+      this.readerStatusMessage  = `Session started ${this.readerSessionStart.toLocaleTimeString()}. Open a book or paste text.`;
+      this.toast('Session started.', 'success');
+    },
+
+    readerEndSession() {
+      this.readerSessionStarted = false;
+      this.readerStopSpeak();
+      this.readerStopTimer();
+      this.readerStatusMessage  = 'Session ended.';
+      this.toast('Session ended.', 'info');
+    },
+
+    readerOpenModalShow() {
+      this.refreshReaderList();
+      this.readerShowOpenModal = true;
+    },
+
+    readerOpenModalPick(f) {
+      this.readerShowOpenModal = false;
+      this.openReaderFile(f);
+    },
+
+    readerToolbarLibrary() {
+      this.switchView('library');
+    },
+
+    async readerToolbarPaste() {
+      if (!navigator.clipboard || !navigator.clipboard.readText) {
+        this.toast('Clipboard not available — paste directly into the page.', 'info');
+        return;
+      }
+      try {
+        const text = await navigator.clipboard.readText();
+        if (!text || !text.trim()) {
+          this.toast('Clipboard is empty.', 'info');
+          return;
+        }
+        const stamp = new Date().toISOString().replace('T', ' ').slice(0, 16);
+        this.readerCurrent = {
+          name:       `pasted-${stamp}.txt`,
+          path:       '',
+          ext:        '.txt',
+          word_count: text.split(/\s+/).length,
+          char_count: text.length,
+          content:    text,
+          front_matter: {},
+        };
+        this.readerSaveTitle = `pasted-${stamp.replace(/[^0-9]/g, '')}`;
+        this.readerStatusMessage = `Pasted ${text.length} chars from clipboard.`;
+        this.toast('Pasted from clipboard.', 'success');
+      } catch (e) {
+        this.toast('Paste failed: ' + e.message, 'error');
+      }
+    },
+
+    readerSpeak() {
+      if (!('speechSynthesis' in window)) {
+        this.toast('Browser TTS not available.', 'error');
+        return;
+      }
+      if (!this.readerCurrent || !(this.readerCurrent.content || '').trim()) {
+        this.toast('Open a book or paste text first.', 'info');
+        return;
+      }
+      // If user has a selection, read that; otherwise read whole page
+      const sel  = (this.readerSelection || '').trim();
+      const text = sel || this.readerCurrent.content;
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.rate = 1.0;
+      u.pitch = 1.0;
+      u.volume = 1.0;
+      u.onend   = () => { this.readerSpeaking = false; };
+      u.onerror = () => { this.readerSpeaking = false; };
+      this.readerUtterance = u;
+      window.speechSynthesis.speak(u);
+      this.readerSpeaking = true;
+      this.readerStatusMessage = sel
+        ? `Reading aloud (${sel.length} chars from selection)…`
+        : `Reading aloud (whole page, ${text.length} chars)…`;
+    },
+
+    readerStopSpeak() {
+      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+      this.readerSpeaking = false;
+      if (this.readerCurrent) this.readerStatusMessage = 'Stopped.';
+    },
+
+    readerVoiceNote() {
+      this.toast('Voice note: coming soon (browser MediaRecorder pending).', 'info');
+    },
+
+    readerToolbarStudy() {
+      this.switchView('cognitive');
+    },
+
+    pickHighlightSwatch(name) {
+      this.readerHighlightSwatch = name;
+      this.readerHighlightColor  = this.readerHighlightSwatches[name];
+    },
+
+    readerHighlightSelection() {
+      // Wrap the live selection in a colored span. Falls back to a
+      // toast if the selection is empty or outside the reader body.
+      const sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0 || sel.toString().length === 0) {
+        this.toast('Select some text first.', 'info');
+        return;
+      }
+      const range = sel.getRangeAt(0);
+      // Refuse to highlight if selection crosses outside the reader body
+      const body  = document.getElementById('reader-body');
+      if (!body || !body.contains(range.commonAncestorContainer)) {
+        this.toast('Select text inside the reader.', 'info');
+        return;
+      }
+      const span = document.createElement('span');
+      span.className   = 'reader-hl';
+      span.style.background    = this.readerHighlightColor;
+      span.style.color         = '#0f172a';
+      span.style.padding       = '0 2px';
+      span.style.borderRadius  = '2px';
+      try {
+        range.surroundContents(span);
+      } catch (e) {
+        // surroundContents fails across element boundaries — fall back
+        const frag = range.extractContents();
+        span.appendChild(frag);
+        range.insertNode(span);
+      }
+      sel.removeAllRanges();
+      this.readerSelection = '';
+      this.readerStatusMessage = `Highlighted in ${this.readerHighlightSwatch.toLowerCase()}.`;
+    },
+
+    readerStartTimer() {
+      if (this.readerTimerRunning) {
+        this.readerStopTimer();
+        return;
+      }
+      const mins = parseInt(this.readerTimerDuration) || 10;
+      this.readerTimerLeft    = mins * 60;
+      this.readerTimerRunning = true;
+      const tick = () => {
+        if (!this.readerTimerRunning) return;
+        this.readerTimerLeft -= 1;
+        if (this.readerTimerLeft <= 0) {
+          this.readerStopTimer();
+          this.readerStatusMessage = '⏰ Timer done — take a break.';
+          this.toast('⏰ Timer done — take a break.', 'success');
+          try { new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=').play(); } catch (_) {}
+        }
+      };
+      this.readerTimerInterval = setInterval(tick, 1000);
+    },
+
+    readerStopTimer() {
+      if (this.readerTimerInterval) clearInterval(this.readerTimerInterval);
+      this.readerTimerInterval = null;
+      this.readerTimerRunning  = false;
+    },
+
+    readerTimerDisplay() {
+      const s = Math.max(0, this.readerTimerLeft);
+      const m = Math.floor(s / 60).toString().padStart(2, '0');
+      const r = (s % 60).toString().padStart(2, '0');
+      return `${m}:${r}`;
+    },
+
+    readerClearCommentary() {
+      this.readerCommentary = null;
+    },
+
+    async loadReaderFolders() {
+      try {
+        const r = await this.api('GET', '/api/reader/folders');
+        this.readerFolderConfig = r.folders || [];
+      } catch (e) {
+        this.toast('Could not load folders: ' + e.message, 'error');
+      }
+    },
+
+    async addReaderFolder() {
+      const p = (this.readerNewFolder || '').trim();
+      if (!p) {
+        this.toast('Type or paste a folder path first.', 'info');
+        return;
+      }
+      this.readerFolderLoading = true;
+      try {
+        const r = await this.api('POST', '/api/reader/folders', { path: p });
+        this.readerFolderConfig = r.folders || [];
+        this.readerNewFolder = '';
+        this.toast('Folder added. Refreshing book list…', 'success');
+        await this.refreshReaderList();
+      } catch (e) {
+        this.toast('Add failed: ' + e.message, 'error');
+      } finally {
+        this.readerFolderLoading = false;
+      }
+    },
+
+    async removeReaderFolder(path) {
+      this.readerFolderLoading = true;
+      try {
+        const r = await this.api('DELETE', '/api/reader/folders?path=' + encodeURIComponent(path));
+        this.readerFolderConfig = r.folders || [];
+        this.toast('Folder removed. Refreshing book list…', 'info');
+        await this.refreshReaderList();
+      } catch (e) {
+        this.toast('Remove failed: ' + e.message, 'error');
+      } finally {
+        this.readerFolderLoading = false;
+      }
+    },
+
+    async readerOpenCommentary() {
+      // Reuse the open modal but tag it as commentary mode
+      // Simpler: prompt for filename or just reuse same modal
+      this.readerOpenModalShow();
+      this._commentaryPickNext = true;
+    },
+
+    // ─────────────────────────────────────
+    // BOOK LIBRARY  (reads Desktop\Books\ via /api/library/*)
+    // ─────────────────────────────────────
+    async refreshLibrary() {
+      this.libraryLoading = true;
+      try {
+        const params = new URLSearchParams();
+        if (this.libraryZoneFilter !== 'ALL') params.set('zone', this.libraryZoneFilter);
+        if (this.librarySourceFilter) params.set('source', this.librarySourceFilter);
+        const [stats, list] = await Promise.all([
+          this.api('GET', '/api/library/stats'),
+          this.api('GET', '/api/library/excerpts' + (params.toString() ? '?' + params.toString() : '')),
+        ]);
+        this.libraryStats = stats;
+        this.libraryItems = list.items || [];
+      } catch (e) {
+        this.toast('Library load failed: ' + e.message, 'error');
+        this.libraryStats = null;
+        this.libraryItems = [];
+      } finally {
+        this.libraryLoading = false;
+      }
+    },
+
+    async openLibraryItem(filename) {
+      this.libraryPreviewLoading = true;
+      this.librarySelected = null;
+      try {
+        this.librarySelected = await this.api('GET', '/api/library/excerpt/' + encodeURIComponent(filename));
+      } catch (e) {
+        this.toast('Preview failed: ' + e.message, 'error');
+      } finally {
+        this.libraryPreviewLoading = false;
+      }
+    },
+
+    setLibraryZone(z) {
+      this.libraryZoneFilter = z;
+      this.refreshLibrary();
+    },
+
+    async askLibrary() {
+      const q = (this.askQuestion || '').trim();
+      if (q.length < 2) {
+        this.toast('Type a question first.', 'info');
+        return;
+      }
+      this.askLoading = true;
+      this.askResult = null;
+      try {
+        const r = await this.api('POST', '/api/library/ask', { question: q, top_k: 6 });
+        this.askResult = r;
+        this.askHistory = [q, ...this.askHistory.filter(x => x !== q)].slice(0, 5);
+        if (r && r.matched === 0) this.toast('No matches yet — try broader terms.', 'info');
+      } catch (e) {
+        this.toast('Ask failed: ' + e.message, 'error');
+      } finally {
+        this.askLoading = false;
+      }
+    },
+
+    useAskHistory(q) {
+      this.askQuestion = q;
+      this.askLibrary();
+    },
+
+    zoneClass(z) {
+      if (z === 'GREEN')  return 'bg-emerald-500/15 text-emerald-300 border-emerald-700';
+      if (z === 'YELLOW') return 'bg-amber-500/15 text-amber-300 border-amber-700';
+      if (z === 'RED')    return 'bg-rose-500/15 text-rose-300 border-rose-700';
+      return 'bg-slate-500/15 text-slate-300 border-slate-700';
+    },
+
+    sourceLabel(p) {
+      if (!p) return 'unknown';
+      const parts = p.split(/[\\/]/);
+      return parts[parts.length - 1] || p;
     },
 
     async quickProcess() {
